@@ -1,0 +1,44 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model Program {
+  id          Int      @id @default(autoincrement())
+  title       String   @db.VarChar(200)
+  description String   @db.Text
+  deadline    DateTime
+  method      String   @db.VarChar(100)
+  quota       Int
+  status      String   @default("OPEN") @db.VarChar(20)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  requirements Requirement[]
+
+  @@index([status])
+  @@index([deadline])
+  @@map("programs")
+}
+
+model Requirement {
+  id               Int      @id @default(autoincrement())
+  programId        Int      @map("program_id")
+  name             String   @db.VarChar(200)
+  description      String?  @db.Text
+  isRequired       Boolean  @default(true) @map("is_required")
+  allowedFileTypes String?  @map("allowed_file_types") @db.VarChar(255)
+  maxFileSize      Int?     @map("max_file_size")
+  sortOrder        Int      @default(0) @map("sort_order")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([programId])
+  @@map("requirements")
+}

@@ -1,0 +1,27 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Document {
+  id             Int      @id @default(autoincrement())
+  registrationId Int      @map("registration_id")
+  documentType   String   @map("document_type") @db.VarChar(30)
+  originalName   String   @map("original_name") @db.VarChar(255)
+  storedName     String   @map("stored_name") @db.VarChar(255)
+  mimeType       String   @map("mime_type") @db.VarChar(100)
+  fileSize       Int      @map("file_size")
+  storagePath    String   @map("storage_path") @db.VarChar(500)
+  status         String   @default("UPLOADED") @db.VarChar(30)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([registrationId])
+  @@index([documentType])
+  @@index([status])
+  @@map("documents")
+}

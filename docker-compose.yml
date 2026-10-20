@@ -1,0 +1,262 @@
+services:
+  rbac-mysql:
+    image: mysql:8.4
+    container_name: rbac-mysql
+    restart: unless-stopped
+
+    environment:
+      MYSQL_ROOT_PASSWORD: 12345678
+      MYSQL_DATABASE: rbac_db
+
+    volumes:
+      - rbac_mysql_data:/var/lib/mysql
+
+    networks:
+      - backend
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-uroot",
+          "-p12345678",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  master-mysql:
+    image: mysql:8.4
+    container_name: master-mysql
+    restart: unless-stopped
+
+    environment:
+      MYSQL_ROOT_PASSWORD: 12345678
+      MYSQL_DATABASE: master_db
+
+    volumes:
+      - master_mysql_data:/var/lib/mysql
+
+    networks:
+      - backend
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-uroot",
+          "-p12345678",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  transaction-mysql:
+    image: mysql:8.4
+    container_name: transaction-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: 12345678
+      MYSQL_DATABASE: transaction_db
+    volumes:
+      - transaction_mysql_data:/var/lib/mysql
+    networks:
+      - backend
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-uroot",
+          "-p12345678",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  document-postgres:
+    image: postgres:16-alpine
+    container_name: document-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 12345678
+      POSTGRES_DB: document_db
+    volumes:
+      - document_postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U postgres -d document_db",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  rbac-service:
+    build:
+      context: ./rbac-service
+      dockerfile: Dockerfile
+
+    container_name: rbac-service
+    restart: unless-stopped
+
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: mysql://root:12345678@rbac-mysql:3306/rbac_db
+      JWT_SECRET: secret-access-token-yang-panjang
+      RBAC_INTERNAL_SERVICE_KEY: rbac-internal-2026
+
+    depends_on:
+      rbac-mysql:
+        condition: service_healthy
+
+    networks:
+      - backend
+
+  master-service:
+    build:
+      context: ./master-service
+      dockerfile: Dockerfile
+
+    container_name: master-service
+    restart: unless-stopped
+
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      DATABASE_URL: mysql://root:12345678@master-mysql:3306/master_db
+      JWT_SECRET: secret-access-token-yang-panjang
+
+    depends_on:
+      master-mysql:
+        condition: service_healthy
+
+    networks:
+      - backend
+
+  transaction-service:
+    build:
+      context: ./transaction-service
+      dockerfile: Dockerfile
+    container_name: transaction-service
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3003
+      DATABASE_URL: mysql://root:12345678@transaction-mysql:3306/transaction_db
+      JWT_SECRET: secret-access-token-yang-panjang
+      INTERNAL_SERVICE_KEY: transaction-document-internal-2026
+      MASTER_SERVICE_URL: http://master-service:3002
+      DOCUMENT_SERVICE_URL: http://document-service:3004
+      RBAC_SERVICE_URL: http://rbac-service:3001
+      RBAC_INTERNAL_SERVICE_KEY: rbac-internal-2026
+    depends_on:
+      transaction-mysql:
+        condition: service_healthy
+      rbac-service:
+        condition: service_started
+    networks:
+      - backend
+
+  document-service:
+    build:
+      context: ./document-service
+      dockerfile: Dockerfile
+    container_name: document-service
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3004
+      DATABASE_URL: postgresql://postgres:12345678@document-postgres:5432/document_db
+      JWT_SECRET: secret-access-token-yang-panjang
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: 3310
+      TRANSACTION_SERVICE_URL: http://transaction-service:3003
+      INTERNAL_SERVICE_KEY: transaction-document-internal-2026
+    depends_on:
+      document-postgres:
+        condition: service_healthy
+      clamav:
+        condition: service_started
+      transaction-service:
+        condition: service_started
+    networks:
+      - backend
+    volumes:
+      - document_uploads:/app/uploads
+
+  clamav:
+    image: clamav/clamav:stable
+    container_name: clamav
+    restart: unless-stopped
+    networks:
+      - backend
+
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      RBAC_SERVICE_URL: http://rbac-service:3001
+      MASTER_SERVICE_URL: http://master-service:3002
+      TRANSACTION_SERVICE_URL: http://transaction-service:3003
+      DOCUMENT_SERVICE_URL: http://document-service:3004
+      JWT_SECRET: secret-access-token-yang-panjang
+    depends_on:
+      rbac-service:
+        condition: service_started
+      master-service:
+        condition: service_started
+      transaction-service:
+        condition: service_started
+      document-service:
+        condition: service_started
+    networks:
+      - backend
+    ports:
+      - "3000:3000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: beasiswa-frontend
+    restart: unless-stopped
+    depends_on:
+      gateway:
+        condition: service_started
+    networks:
+      - backend
+    ports:
+      - "5173:80"
+
+volumes:
+  rbac_mysql_data:
+  master_mysql_data:
+  transaction_mysql_data:
+  document_postgres_data:
+  document_uploads:
+
+networks:
+  backend:
+    driver: bridge

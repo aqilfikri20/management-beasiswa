@@ -1,0 +1,126 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+model Applicant {
+  id           Int      @id @default(autoincrement())
+  userId       Int      @unique @map("user_id")
+
+  nik          String   @unique @db.VarChar(16)
+  nama         String   @db.VarChar(150)
+  tempatLahir  String?  @map("tempat_lahir") @db.VarChar(100)
+  tanggalLahir DateTime? @map("tanggal_lahir")
+  jenisKelamin String?  @map("jenis_kelamin") @db.VarChar(20)
+
+  alamat       String?  @db.Text
+  provinsi     String?  @db.VarChar(100)
+  kabupaten    String?  @db.VarChar(100)
+  kecamatan    String?  @db.VarChar(100)
+  kelurahan    String?  @db.VarChar(100)
+
+  noHp         String?  @map("no_hp") @db.VarChar(20)
+  email        String?  @db.VarChar(255)
+
+  pendidikan   String?  @db.VarChar(100)
+  instansi     String?  @db.VarChar(150)
+  jurusan      String?  @db.VarChar(150)
+  pekerjaan    String?  @db.VarChar(100)
+
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  registrations Registration[]
+
+  @@index([userId])
+  @@map("applicants")
+}
+
+model Registration {
+  id          Int      @id @default(autoincrement())
+
+  applicantId Int      @map("applicant_id")
+  programId   Int      @map("program_id")
+
+  status      String   @default("DRAFT") @db.VarChar(30)
+
+  submittedAt DateTime? @map("submitted_at")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+applicant Applicant @relation(fields: [applicantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  administrativeSelection AdministrativeSelection?
+  interviewSelection      InterviewSelection?
+  selectionResult         SelectionResult?
+
+  @@unique([applicantId, programId])
+  @@index([applicantId])
+  @@index([programId])
+  @@index([status])
+  @@map("registrations")
+}
+
+model AdministrativeSelection {
+  id             Int      @id @default(autoincrement())
+  registrationId Int      @unique @map("registration_id")
+
+  status         String   @db.VarChar(20)
+  score          Decimal? @db.Decimal(5, 2)
+  notes          String?  @db.Text
+
+  verifiedBy     Int?     @map("verified_by")
+  verifiedAt     DateTime? @map("verified_at")
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  registration Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([status])
+  @@index([verifiedBy])
+  @@map("administrative_selections")
+}
+
+model InterviewSelection {
+  id             Int      @id @default(autoincrement())
+  registrationId Int      @unique @map("registration_id")
+
+  status         String    @db.VarChar(20)
+
+  scheduledAt    DateTime? @map("scheduled_at")
+  score          Decimal?  @db.Decimal(5, 2)
+  notes          String?   @db.Text
+
+  interviewerId  Int?      @map("interviewer_id")
+  interviewedAt  DateTime? @map("interviewed_at")
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  registration Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([status])
+  @@index([interviewerId])
+  @@map("interview_selections")
+}
+
+model SelectionResult {
+  id             Int      @id @default(autoincrement())
+  registrationId Int      @unique @map("registration_id")
+
+  result         String    @db.VarChar(20)
+  finalScore     Decimal?  @map("final_score") @db.Decimal(5, 2)
+  notes          String?   @db.Text
+  announcedAt    DateTime? @map("announced_at")
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  registration Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([result])
+  @@map("selection_results")
+}
